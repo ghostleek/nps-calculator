@@ -1,19 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-import spacy
-
-# Function to load spaCy model with fallback in case it's not installed
-def load_spacy_model():
-    try:
-        return spacy.load("en_core_web_sm")
-    except OSError:
-        from spacy.cli import download
-        download("en_core_web_sm")
-        return spacy.load("en_core_web_sm")
-
-# Load spaCy model
-nlp = load_spacy_model()
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 # Helper functions
 def calculate_nps(df):
@@ -35,7 +23,7 @@ def calculate_nps(df):
         nps_score = ((promoters - detractors) / total_responses) * 100
         average_rating = subset['Rating'].mean()
         nps_data[entity] = {'NPS': nps_score, 'Avg Rating': average_rating}
-
+    
     return nps_data
 
 def format_nps(nps_data):
@@ -47,10 +35,19 @@ def format_nps(nps_data):
         })
     return formatted_data
 
-def categorize_feedback(text):
-    doc = nlp(text)
-    categories = [ent.label_ for ent in doc.ents]
-    return categories if categories else ["Uncategorized"]
+def analyze_sentiment(comments):
+    analyzer = SentimentIntensityAnalyzer()
+    positive_comments = []
+    negative_comments = []
+
+    for comment in comments:
+        sentiment_score = analyzer.polarity_scores(comment)['compound']
+        if sentiment_score >= 0.7:
+            positive_comments.append(comment)
+        else:
+            negative_comments.append(comment)
+
+    return positive_comments, negative_comments
 
 # Streamlit app
 st.title('NPS Score Calculator')
@@ -81,41 +78,72 @@ if uploaded_file is not None:
         end_date = datetime.combine(end_date, datetime.max.time())
     
     filtered_data = data[(data['Submitted At'] >= start_date) & (data['Submitted At'] <= end_date)]
-    filtered_data = filtered_data.dropna(subset=['Answer'])
+    # hide filtered data 
+    # st.write(filtered_data)
     
     # Calculate NPS
     nps_scores = calculate_nps(filtered_data)
     formatted_nps = format_nps(nps_scores)
     
     # Display NPS scores
-    st.write("### Feedback")
+    st.write("### Net Promoter Score (NPS)")
     st.table(pd.DataFrame(formatted_nps))
     
     # Display unique feedback submissions count
     unique_submissions = filtered_data['User Id'].nunique()
     st.write(f"Unique Feedback Submissions: {unique_submissions}")
-    
+    total_submissions = filtered_data['User Id'].count()
+    st.write(f"Total Feedback Submissions: {total_submissions}")
     st.write("---")
 
-    # Display categorized answers
-    st.write("### Categorized Feedback")
-    filtered_data['Categories'] = filtered_data['Answer'].apply(lambda x: categorize_feedback(str(x)))
+    # Comments section
+    st.write("### Comments")
+
+    booking_data = filtered_data[filtered_data['Entity'].str.contains('BOOKING')]
+    ballot_data = filtered_data[filtered_data['Entity'].str.contains('BALLOT')]
     
+    booking_answers = booking_data['Answer'].dropna()
+    ballot_answers = ballot_data['Answer'].dropna()
+
+    booking_positive, booking_negative = analyze_sentiment(booking_answers)
+    ballot_positive, ballot_negative = analyze_sentiment(ballot_answers)
+
     col1, col2 = st.columns(2)
+
     with col1:
-        st.write("#### Booking Comments")
-        booking_data = filtered_data[filtered_data['Entity'].str.contains("BOOKING")]
-        for index, row in booking_data.iterrows():
-            st.write(f"**User ID:** {row['User Id']}")
-            st.write(f"**Answer:** {row['Answer']}")
-            st.write(f"**Categories:** {', '.join(row['Categories'])}")
-            st.write("---")
-    
+        st.write(f"#### Booking")
+        st.write(f"{len(booking_answers)} out of {len(booking_data)} wrote comments")
+        with st.expander(f"Positive Feedback ({len(booking_positive)})"):
+            if booking_positive:
+                for answer in booking_positive:
+                    st.write(answer)
+                    st.write("---")
+            else:
+                st.write("No positive booking comments available.")
+
+        with st.expander(f"Negative Feedback ({len(booking_negative)})"):
+            if booking_negative:
+                for answer in booking_negative:
+                    st.write(answer)
+                    st.write("---")
+            else:
+                st.write("No negative booking comments available.")
+
     with col2:
-        st.write("#### Ballot Comments")
-        ballot_data = filtered_data[filtered_data['Entity'].str.contains("BALLOT")]
-        for index, row in ballot_data.iterrows():
-            st.write(f"**User ID:** {row['User Id']}")
-            st.write(f"**Answer:** {row['Answer']}")
-            st.write(f"**Categories:** {', '.join(row['Categories'])}")
-            st.write("---")
+        st.write(f"#### Ballot")
+        st.write(f"{len(ballot_answers)} out of {len(ballot_data)} wrote comments")
+        with st.expander(f"Positive Feedback ({len(ballot_positive)})"):
+            if ballot_positive:
+                for answer in ballot_positive:
+                    st.write(answer)
+                    st.write("---")
+            else:
+                st.write("No positive ballot comments available.")
+
+        with st.expander(f"Negative Feedback ({len(ballot_negative)})"):
+            if ballot_negative:
+                for answer in ballot_negative:
+                    st.write(answer)
+                    st.write("---")
+            else:
+                st.write("No negative ballot comments available.")
