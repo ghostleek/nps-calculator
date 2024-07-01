@@ -56,7 +56,7 @@ st.title('NPS Score Calculator')
 uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
 if uploaded_file is not None:
     data = pd.read_csv(uploaded_file, parse_dates=['Submitted At'], dayfirst=True)
-    data['Submitted At'] = pd.to_datetime(data['Submitted At'], format='%d/%m/%y %H:%M')
+    data['Submitted At'] = pd.to_datetime(data['Submitted At'], format='%Y-%m-%d %H:%M:%S')
     
     # Date range selection
     date_options = ['Past Week', 'Past Month', 'All Time', 'Custom Date Range']
@@ -78,8 +78,6 @@ if uploaded_file is not None:
         end_date = datetime.combine(end_date, datetime.max.time())
     
     filtered_data = data[(data['Submitted At'] >= start_date) & (data['Submitted At'] <= end_date)]
-    # hide filtered data 
-    # st.write(filtered_data)
     
     # Calculate NPS
     nps_scores = calculate_nps(filtered_data)
@@ -98,20 +96,15 @@ if uploaded_file is not None:
 
     # Comments section
     st.write("### Comments")
+    st.write("⚠️ for grouping of positive v negative, a simple library for sentiment analysis is used - please exercise discretion")
 
-    booking_data = filtered_data[filtered_data['Entity'].str.contains('BOOKING')]
-    ballot_data = filtered_data[filtered_data['Entity'].str.contains('BALLOT')]
-    
-    booking_answers = booking_data['Answer'].dropna()
-    ballot_answers = ballot_data['Answer'].dropna()
-
-    booking_positive, booking_negative = analyze_sentiment(booking_answers)
-    ballot_positive, ballot_negative = analyze_sentiment(ballot_answers)
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.write(f"#### Booking")
+    # Analyze and display comments for Booking
+    with st.container():
+        st.write("#### Booking")
+        booking_data = filtered_data[filtered_data['Entity'].str.contains('BOOKING_BY_PAYMENT_ID', case=False)]
+        booking_answers = booking_data['Answer'].dropna()
+        booking_positive, booking_negative = analyze_sentiment(booking_answers)
+        
         st.write(f"{len(booking_answers)} out of {len(booking_data)} wrote comments")
         with st.expander(f"Positive Feedback ({len(booking_positive)})"):
             if booking_positive:
@@ -129,8 +122,13 @@ if uploaded_file is not None:
             else:
                 st.write("No negative booking comments available.")
 
-    with col2:
-        st.write(f"#### Ballot")
+    # Analyze and display comments for Ballot
+    with st.container():
+        st.write("#### Ballot")
+        ballot_data = filtered_data[filtered_data['Entity'].str.contains('BALLOT_BY_REFERENCE_ID', case=False)]
+        ballot_answers = ballot_data['Answer'].dropna()
+        ballot_positive, ballot_negative = analyze_sentiment(ballot_answers)
+
         st.write(f"{len(ballot_answers)} out of {len(ballot_data)} wrote comments")
         with st.expander(f"Positive Feedback ({len(ballot_positive)})"):
             if ballot_positive:
@@ -147,3 +145,27 @@ if uploaded_file is not None:
                     st.write("---")
             else:
                 st.write("No negative ballot comments available.")
+
+    # Analyze and display comments for Programme
+    with st.container():
+        st.write("#### Programme")
+        programme_data = filtered_data[filtered_data['Entity'].str.contains('PROGRAMME', case=False)]
+        programme_answers = programme_data['Answer'].dropna()
+        programme_positive, programme_negative = analyze_sentiment(programme_answers)
+
+        st.write(f"{len(programme_answers)} out of {len(programme_data)} wrote comments")
+        with st.expander(f"Positive Feedback ({len(programme_positive)})"):
+            if programme_positive:
+                for answer in programme_positive:
+                    st.write(answer)
+                    st.write("---")
+            else:
+                st.write("No positive programme comments available.")
+
+        with st.expander(f"Negative Feedback ({len(programme_negative)})"):
+            if programme_negative:
+                for answer in programme_negative:
+                    st.write(answer)
+                    st.write("---")
+            else:
+                st.write("No negative programme comments available.")
